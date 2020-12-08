@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Homework 6!"
 author: "Wuraola Olawole"
 date: "12/6/2020"
 output: github_document
@@ -167,16 +167,6 @@ baby_df %>%
        y = "Residuals")
 ```
 
-```{r}
-q1 = ggplot(baby_res, aes(x = blength, y = resid)) + geom_boxplot()
-q2 = ggplot(baby_res, aes(bhead, resid)) + geom_boxplot()
-q3 = ggplot(baby_res, aes(gaweeks, resid)) + geom_boxplot()
-q4 = ggplot(baby_res, aes(smoken, resid)) + geom_boxplot()
-q5 = ggplot(baby_res, aes(wtgain, resid)) + geom_boxplot()
-q6 = ggplot(baby_res, aes(momage, resid)) + geom_boxplot()
-
-(q1 + q2 + q3)/(q4 + q5 + q6)
-```
 
 
 ```{r}
@@ -243,6 +233,7 @@ weather_df =
   select(name, id, everything())
 ```
 
+exploratory
 ```{r}
 weather_df %>% 
   ggplot(aes(x = tmin, y = tmax)) + 
@@ -251,21 +242,56 @@ weather_df %>%
 
 
 ```{r}
-weather_df %>% 
+bootstr =
+  weather_df %>% 
   modelr::bootstrap(n = 5000) %>% 
   mutate(
     models = map(strap, ~ lm(tmax ~ tmin, data = .x)),
+    r_hat = map(models, broom::glance),
     results = map(models, broom::tidy)) %>% 
-  select(results) %>% 
-  unnest(results) %>%
-  select(term, estimate) %>%
-mutate(term = str_replace(term,"(Intercept)","Intercept")) %>%
-pivot_wider(
-names_from = "term",
-values_from = "estimate"
-)
+  select(results, r_hat) %>% 
+  unnest(results, r_hat) %>%
+mutate(term = str_replace(term,"\\(Intercept\\)","Intercept"))
   
-  ggplot(aes(x = estimate)) + geom_density()
 ```
 
 ```{r}
+est =
+bootstr %>%
+select(term, estimate, adj.r.squared) %>%
+pivot_wider(
+names_from = "term",
+values_from = "estimate"
+) %>%
+  janitor::clean_names() %>%
+  rename(rhat_sq = adj_r_squared) %>%
+  mutate(
+    log_est = log(intercept * tmin)
+  ) %>%
+  select(-intercept, -tmin)
+
+```
+
+
+```{r}
+
+est %>%
+  pivot_longer(1:2,
+               names_to = "estimates",
+               values_to = "values") %>%
+  ggplot(aes(x = estimates, y = values, fill = estimates)) + geom_violin(alpha = 0.4) 
+           
+
+```
+
+```{r}
+est %>%
+  pivot_longer(1:2,
+               names_to = "estimates",
+               values_to = "values") %>% 
+  group_by(estimates) %>% 
+  summarize(
+    ci_lower = quantile(values, 0.025), 
+    ci_upper = quantile(values, 0.975))
+```
+
