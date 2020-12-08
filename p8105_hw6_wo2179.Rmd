@@ -8,10 +8,9 @@ output: github_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(viridis)
+library(patchwork)
 library(modelr)
 library(mgcv)
-library(lares)
-
 ```
 
 ```{r}
@@ -114,38 +113,159 @@ baby_df =
   read_csv("./data/birthweight.csv") %>%
   janitor::clean_names() %>%
   mutate(
-    babysex = recode_factor(babysex, `1` = "male", `2` = "female"),
-    frace = recode_factor(frace, '1' = "White", '2' = "Black", '3' = "Asian", '4' = "Puerto Rican", '8' = "Other", '9' = "Unknown"),
-    mrace = recode_factor(mrace, '1' = "White", '2' = "Black", '3' = "Asian", '4' = "Puerto Rican", '8' = "Other", '9' = "Unknown"),
-    malform = recode_factor(malform, '0' = "absent", '1' = "present")
-  )
-
-```
-
-
-```{r}
-corr_var(baby_df, bwt, 
-  top = 17
-) 
-```
-
-```{r}
-cv_df = 
-  crossv_mc(baby_df, 100) 
-
-```
-
-
-fit a model
-
-```{r}
-model_fit = lm(bwt ~ gaweeks, data = baby_df)
+    babysex = as_factor(babysex),
+    frace = as_factor(frace),
+    mrace = as_factor(mrace),
+    malform = as_factor(malform)
+  ) %>%
+  drop_na()
 ```
 
 ```{r}
 baby_df %>% 
-  modelr::add_residuals(model_fit) %>% 
-  ggplot(aes(x = gaweeks, y = resid)) + 
-  geom_point()
+  ggplot(aes(x = bwt)) + geom_density()
 ```
 
+```{r}
+p1 = ggplot(baby_df, aes(blength, bwt)) + geom_point()
+p2 = ggplot(baby_df, aes(bhead,bwt)) + geom_point()
+p3 = ggplot(baby_df, aes(gaweeks, bwt)) + geom_point()
+p4 = ggplot(baby_df, aes(smoken, bwt)) + geom_point()
+p5 = ggplot(baby_df, aes(wtgain, bwt)) + geom_point()
+p6 = ggplot(baby_df, aes(momage,bwt)) + geom_point()
+
+(p1 + p2 + p3) / (p4 + p5 + p6)
+
+
+```
+
+One using length at birth and gestational age as predictors (main effects only)
+One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+
+```{r}
+
+mod1 = 
+      lm(bwt ~ blength + bhead + gaweeks + smoken + wtgain + momage , data = baby_df )
+summary(mod1)
+broom::tidy(mod1)
+broom::glance(mod1)
+
+```
+
+
+```{r}
+baby_res =
+baby_df %>%
+  add_residuals(mod1) %>%
+  add_predictions(mod1) %>%
+  select(bwt, blength, bhead , gaweeks , smoken , wtgain , momage, resid, pred)
+  
+   ggplot(baby_res, aes(x = pred, y = resid)) + geom_point() +
+  geom_line(aes(y = pred), col = 'red') + 
+  labs(title = "Residuals vs Fitted values plot",
+       x = "Fitted values",
+       y = "Residuals")
+```
+
+```{r}
+q1 = ggplot(baby_res, aes(x = blength, y = resid)) + geom_boxplot()
+q2 = ggplot(baby_res, aes(bhead, resid)) + geom_boxplot()
+q3 = ggplot(baby_res, aes(gaweeks, resid)) + geom_boxplot()
+q4 = ggplot(baby_res, aes(smoken, resid)) + geom_boxplot()
+q5 = ggplot(baby_res, aes(wtgain, resid)) + geom_boxplot()
+q6 = ggplot(baby_res, aes(momage, resid)) + geom_boxplot()
+
+(q1 + q2 + q3)/(q4 + q5 + q6)
+```
+
+
+```{r}
+mod2 =
+      lm(bwt~ blength + gaweeks, data = baby_df)
+  
+mod3 =
+      lm(bwt~ bhead + blength + babysex + bhead*blength + bhead*babysex + babysex*blength + babysex*blength*bhead, data = baby_df)
+
+```
+
+
+```{r}
+cv_df = 
+  crossv_mc(baby_df, 200) %>%
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+```
+
+Fit candidate models
+```{r}
+mod_com_df = 
+  cv_df %>% 
+  mutate(
+    mod_1  = map(train, ~lm(bwt ~ blength + bhead + gaweeks + smoken + wtgain + momage, data = .x)),
+    mod_2  = map(train, ~lm(bwt~ blength + gaweeks, data = .x)),
+    mod_3  = map(train, ~lm(bwt~ bhead + blength + babysex + bhead*blength + 
+                      bhead*babysex + babysex*blength + babysex*blength*bhead, data = .x))) %>% 
+  mutate(
+    rmse_mod1 = map2_dbl(mod_1, test, ~rmse(model = .x, data = .y)),
+    rmse_mod2 = map2_dbl(mod_2, test, ~rmse(model = .x, data = .y)),
+    rmse_mod3 = map2_dbl(mod_3, test, ~rmse(model = .x, data = .y)))
+```
+
+
+```{r}
+mod_com_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+
+```
+
+
+## problem 3
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+```{r}
+weather_df %>% 
+  ggplot(aes(x = tmin, y = tmax)) + 
+  geom_point() 
+```
+
+
+```{r}
+weather_df %>% 
+  modelr::bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap, ~ lm(tmax ~ tmin, data = .x)),
+    results = map(models, broom::tidy)) %>% 
+  select(results) %>% 
+  unnest(results) %>%
+  select(term, estimate) %>%
+mutate(term = str_replace(term,"(Intercept)","Intercept")) %>%
+pivot_wider(
+names_from = "term",
+values_from = "estimate"
+)
+  
+  ggplot(aes(x = estimate)) + geom_density()
+```
+
+```{r}
