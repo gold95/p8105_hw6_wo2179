@@ -160,7 +160,7 @@ baby_df %>%
   add_predictions(mod1) %>%
   select(bwt, blength, bhead , gaweeks , smoken , wtgain , momage, resid, pred)
   
-   ggplot(baby_res, aes(x = pred, y = resid)) + geom_point() +
+  ggplot(baby_res, aes(x = pred, y = resid)) + geom_point() + geom_smooth(method = lm, se = FALSE ) +
   geom_line(aes(y = pred), col = 'red') + 
   labs(title = "Residuals vs Fitted values plot",
        x = "Fitted values",
