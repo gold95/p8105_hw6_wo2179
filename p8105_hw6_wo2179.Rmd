@@ -106,7 +106,7 @@ models_results_df %>%
 
 ## Problem 2
 
-Find some residuals
+Load and clean data, convert some class numeric to factor, check NA
 
 ```{r}
 baby_df = 
@@ -117,15 +117,20 @@ baby_df =
     frace = as_factor(frace),
     mrace = as_factor(mrace),
     malform = as_factor(malform)
-  ) %>%
-  drop_na()
+  ) 
+  
+Chk_NA = is.na(baby_df) 
+# no NAs!
+
 ```
 
+Explore distribution of outcome (bwt) visually
 ```{r}
 baby_df %>% 
   ggplot(aes(x = bwt)) + geom_density()
 ```
 
+Explore visually the relationship between outcome and candidate predictors 
 ```{r}
 p1 = ggplot(baby_df, aes(blength, bwt)) + geom_point()
 p2 = ggplot(baby_df, aes(bhead,bwt)) + geom_point()
@@ -136,49 +141,61 @@ p6 = ggplot(baby_df, aes(momage,bwt)) + geom_point()
 
 (p1 + p2 + p3) / (p4 + p5 + p6)
 
-
 ```
 
-One using length at birth and gestational age as predictors (main effects only)
-One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 
+fit model with predictors explored previously
 ```{r}
+
+# H0 = There is no significant linear relationship between the outcome (bwt) and predictors, Bo = 0
+# H1 = There is a significant linear relationship between the outcome and the predictors, Bo ≠ 0
 
 mod1 = 
       lm(bwt ~ blength + bhead + gaweeks + smoken + wtgain + momage , data = baby_df )
 summary(mod1)
 broom::tidy(mod1)
 broom::glance(mod1)
+qt(0.95, 4335)
+
+aov(mod1)
+summary(aov(mod1))
+qf(0.95, 6, 4335)
 
 ```
+Exploring the results above, all the relationships were significant and we reject the null hypothesis and conclude that there is a significant linear relationship between the predictors and the outcome. Sidenote: the p_values were significant as well.
 
 
+plot residuals against fitted values
 ```{r}
-baby_res =
+
 baby_df %>%
   add_residuals(mod1) %>%
   add_predictions(mod1) %>%
-  select(bwt, blength, bhead , gaweeks , smoken , wtgain , momage, resid, pred)
-  
-  ggplot(baby_res, aes(x = pred, y = resid)) + geom_point() + geom_smooth(method = lm, se = FALSE ) +
-  geom_line(aes(y = pred), col = 'red') + 
+  select(bwt, blength, bhead , gaweeks , smoken , wtgain , momage, resid, pred) %>%
+ ggplot(aes(x = pred, y = resid)) +
+  geom_point(size = 2) +
+  geom_smooth(aes(colour = pred, fill = pred)) + 
+                geom_hline(yintercept = 0) +
   labs(title = "Residuals vs Fitted values plot",
        x = "Fitted values",
        y = "Residuals")
 ```
+The modeling process I employed involved visualizing the distribution of the outcome. Looked up some literature to explore already proven relationships between outcome and some predictors.I explored the visual relationships between the outcome and my predictors of interest. Proposed an hypothesis, fitted a model and tested the hypothesis to explore that there truly was a relationship between my outcome and predictors.
 
 
 
+fit one model using length at birth and gestational age as predictors (main effects only)
+fit another model  using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 ```{r}
 mod2 =
       lm(bwt~ blength + gaweeks, data = baby_df)
-  
+
 mod3 =
       lm(bwt~ bhead + blength + babysex + bhead*blength + bhead*babysex + babysex*blength + babysex*blength*bhead, data = baby_df)
 
 ```
 
-
+Cross validation!
 ```{r}
 cv_df = 
   crossv_mc(baby_df, 200) %>%
@@ -187,7 +204,7 @@ cv_df =
     test = map(test, as_tibble))
 ```
 
-Fit candidate models
+Fit candidate models and obtain RMSEs!
 ```{r}
 mod_com_df = 
   cv_df %>% 
@@ -202,7 +219,7 @@ mod_com_df =
     rmse_mod3 = map2_dbl(mod_3, test, ~rmse(model = .x, data = .y)))
 ```
 
-
+Compare models. (Sidenote: RMSE has the range of outcome)
 ```{r}
 mod_com_df %>% 
   select(starts_with("rmse")) %>% 
@@ -219,7 +236,9 @@ mod_com_df %>%
 
 ## problem 3
 
+Load weather dataset
 ```{r}
+
 weather_df = 
   rnoaa::meteo_pull_monitors(
     c("USW00094728"),
@@ -233,14 +252,14 @@ weather_df =
   select(name, id, everything())
 ```
 
-exploratory
+Visual exploration!
 ```{r}
 weather_df %>% 
   ggplot(aes(x = tmin, y = tmax)) + 
   geom_point() 
 ```
 
-
+5000 bootstrap samples fitting slr for tmax and tmin
 ```{r}
 bootstr =
   weather_df %>% 
@@ -255,6 +274,7 @@ mutate(term = str_replace(term,"\\(Intercept\\)","Intercept"))
   
 ```
 
+obtaining estimates, tidying and cleaning
 ```{r}
 est =
 bootstr %>%
@@ -270,20 +290,27 @@ values_from = "estimate"
   ) %>%
   select(-intercept, -tmin)
 
+est
+
 ```
 
-
+visualization of distribution
 ```{r}
 
 est %>%
   pivot_longer(1:2,
                names_to = "estimates",
                values_to = "values") %>%
-  ggplot(aes(x = estimates, y = values, fill = estimates)) + geom_violin(alpha = 0.4) 
+  ggplot(aes(x = estimates, y = values, fill = estimates)) + 
+  geom_violin(alpha = 0.4) +
+  labs( title = "Distribution of Estimates")
            
 
 ```
+Both estimates had a normal curve. R_hat squared had a tall and skinny curve while the log estimate had a short and fat curve. This signifies that R_hat squared had a lesser standard deviation compared with log estimate.
 
+
+95% confidence interval for both estimates
 ```{r}
 est %>%
   pivot_longer(1:2,
@@ -292,6 +319,6 @@ est %>%
   group_by(estimates) %>% 
   summarize(
     ci_lower = quantile(values, 0.025), 
-    ci_upper = quantile(values, 0.975))
+    ci_upper = quantile(values, 0.975), mean = mean(values), st_dev = sd(values))
 ```
-
+We can expect the true pop parameters of these estimates to fall within these intervals.
