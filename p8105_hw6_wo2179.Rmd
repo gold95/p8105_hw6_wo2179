@@ -6,6 +6,7 @@ output: github_document
 ---
 
 ```{r setup, include=FALSE}
+
 library(tidyverse)
 library(viridis)
 library(patchwork)
@@ -13,7 +14,8 @@ library(modelr)
 library(mgcv)
 ```
 
-```{r}
+```{r, include FALSE}
+
 knitr::opts_chunk$set(
 	echo = TRUE,
 	warning = FALSE,
@@ -26,14 +28,16 @@ options(
   ggplot2.continuous.fill = "viridis"
 )
 scale_colour_discrete = scale_colour_viridis_d
-scale_fill_discrete = scale_fill_viridis_d
-theme_set(theme_minimal() + theme(legend.position = "bottom"))
+  scale_fill_discrete = scale_fill_viridis_d
+    theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
 ```
 
 
 ### Problem 1
 
-```{r}
+```{r, message=FALSE}
+
 homicide_df = 
   read_csv("data/homicide-data.csv", na = c("", "NA", "Unknown")) %>% 
   mutate(
@@ -48,58 +52,65 @@ homicide_df =
     victim_race %in% c("White", "Black"),
     city_state != "Tulsa, AL") %>% 
   select(city_state, resolution, victim_age, victim_race, victim_sex)
+
 ```
 
 
 Start with one city.
 
 ```{r}
+
 baltimore_df =
-  homicide_df %>% 
-  filter(city_state == "Baltimore, MD")
-glm(resolution ~ victim_age + victim_race + victim_sex, 
+      homicide_df %>% 
+        filter(city_state == "Baltimore, MD")
+          glm(resolution ~ victim_age + victim_race + victim_sex, 
     data = baltimore_df,
-    family = binomial()) %>% 
-  broom::tidy() %>% 
+      family = binomial()) %>% 
+        broom::tidy() %>% 
   mutate(
     OR = exp(estimate),
     CI_lower = exp(estimate - 1.96 * std.error),
     CI_upper = exp(estimate + 1.96 * std.error)
   ) %>% 
   select(term, OR, starts_with("CI")) %>% 
-  knitr::kable(digits = 3)
+    knitr::kable(digits = 3)
+
 ```
 
 
-Try this across cities.
+Across cities.
 
 ```{r}
+
 models_results_df = 
   homicide_df %>% 
-  nest(data = -city_state) %>% 
+    nest(data = -city_state) %>% 
   mutate(
     models = 
       map(.x = data, ~glm(resolution ~ victim_age + victim_race + victim_sex, data = .x, family = binomial())),
     results = map(models, broom::tidy)
-  ) %>% 
+        ) %>% 
   select(city_state, results) %>% 
-  unnest(results) %>% 
-  mutate(
-    OR = exp(estimate),
-    CI_lower = exp(estimate - 1.96 * std.error),
-    CI_upper = exp(estimate + 1.96 * std.error)
-  ) %>% 
+    unnest(results) %>% 
+      mutate(
+              OR = exp(estimate),
+              CI_lower = exp(estimate - 1.96 * std.error),
+              CI_upper = exp(estimate + 1.96 * std.error)
+            ) %>% 
   select(city_state, term, OR, starts_with("CI")) 
+
 ```
 
 ```{r}
+
 models_results_df %>% 
   filter(term == "victim_sexMale") %>% 
-  mutate(city_state = fct_reorder(city_state, OR)) %>% 
-  ggplot(aes(x = city_state, y = OR)) + 
-  geom_point() + 
-  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper)) + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    mutate(city_state = fct_reorder(city_state, OR)) %>% 
+      ggplot(aes(x = city_state, y = OR)) + 
+        geom_point() + 
+      geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper)) + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
 ```
 
 
@@ -108,16 +119,17 @@ models_results_df %>%
 
 Load and clean data, convert some class numeric to factor, check NA
 
-```{r}
+```{r, message = FALSE}
+
 baby_df = 
   read_csv("./data/birthweight.csv") %>%
-  janitor::clean_names() %>%
-  mutate(
-    babysex = as_factor(babysex),
-    frace = as_factor(frace),
-    mrace = as_factor(mrace),
-    malform = as_factor(malform)
-  ) 
+    janitor::clean_names() %>%
+      mutate(
+              babysex = as_factor(babysex),
+              frace = as_factor(frace),
+              mrace = as_factor(mrace),
+              malform = as_factor(malform)
+            ) 
   
 Chk_NA = is.na(baby_df) 
 # no NAs!
@@ -126,18 +138,22 @@ Chk_NA = is.na(baby_df)
 
 Explore distribution of outcome (bwt) visually
 ```{r}
+
 baby_df %>% 
   ggplot(aes(x = bwt)) + geom_density()
+
 ```
 
 Explore visually the relationship between outcome and candidate predictors 
 ```{r}
+
 p1 = ggplot(baby_df, aes(blength, bwt)) + geom_point()
-p2 = ggplot(baby_df, aes(bhead,bwt)) + geom_point()
-p3 = ggplot(baby_df, aes(gaweeks, bwt)) + geom_point()
-p4 = ggplot(baby_df, aes(smoken, bwt)) + geom_point()
-p5 = ggplot(baby_df, aes(wtgain, bwt)) + geom_point()
-p6 = ggplot(baby_df, aes(momage,bwt)) + geom_point()
+  p2 = ggplot(baby_df, aes(bhead,bwt)) + geom_point()
+    p3 = ggplot(baby_df, aes(gaweeks, bwt)) + geom_point()
+      
+    p4 = ggplot(baby_df, aes(smoken, bwt)) + geom_point()
+        p5 = ggplot(baby_df, aes(wtgain, bwt)) + geom_point()
+          p6 = ggplot(baby_df, aes(momage,bwt)) + geom_point()
 
 (p1 + p2 + p3) / (p4 + p5 + p6)
 
@@ -152,33 +168,36 @@ fit model with predictors explored previously
 
 mod1 = 
       lm(bwt ~ blength + bhead + gaweeks + smoken + wtgain + momage , data = baby_df )
-summary(mod1)
-broom::tidy(mod1)
-broom::glance(mod1)
-qt(0.95, 4335)
+        summary(mod1)
+          broom::tidy(mod1)
+            broom::glance(mod1)
+              qt(0.95, 4335)
 
 aov(mod1)
-summary(aov(mod1))
-qf(0.95, 6, 4335)
+  summary(aov(mod1))
+    qf(0.95, 6, 4335)
 
 ```
 Exploring the results above, all the relationships were significant and we reject the null hypothesis and conclude that there is a significant linear relationship between the predictors and the outcome. Sidenote: the p_values were significant as well.
 
 
-plot residuals against fitted values
+Plot residuals against fitted values
 ```{r}
 
 baby_df %>%
   add_residuals(mod1) %>%
-  add_predictions(mod1) %>%
-  select(bwt, blength, bhead , gaweeks , smoken , wtgain , momage, resid, pred) %>%
+    add_predictions(mod1) %>%
+      select(bwt, blength, bhead , gaweeks , smoken , wtgain , momage, resid, pred) %>%
+  
  ggplot(aes(x = pred, y = resid)) +
   geom_point(size = 2) +
-  geom_smooth(aes(colour = pred, fill = pred)) + 
+    geom_smooth(aes(colour = pred, fill = pred)) + 
                 geom_hline(yintercept = 0) +
+  
   labs(title = "Residuals vs Fitted values plot",
        x = "Fitted values",
        y = "Residuals")
+
 ```
 The modeling process I employed involved visualizing the distribution of the outcome. Looked up some literature to explore already proven relationships between outcome and some predictors.I explored the visual relationships between the outcome and my predictors of interest. Proposed an hypothesis, fitted a model and tested the hypothesis to explore that there truly was a relationship between my outcome and predictors.
 
@@ -187,6 +206,7 @@ The modeling process I employed involved visualizing the distribution of the out
 fit one model using length at birth and gestational age as predictors (main effects only)
 fit another model  using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 ```{r}
+
 mod2 =
       lm(bwt~ blength + gaweeks, data = baby_df)
 
@@ -197,39 +217,46 @@ mod3 =
 
 Cross validation!
 ```{r}
+
 cv_df = 
   crossv_mc(baby_df, 200) %>%
-  mutate(
-    train = map(train, as_tibble),
-    test = map(test, as_tibble))
+    mutate(
+          train = map(train, as_tibble),
+          test = map(test, as_tibble))
+
 ```
 
 Fit candidate models and obtain RMSEs!
 ```{r}
+
 mod_com_df = 
   cv_df %>% 
-  mutate(
-    mod_1  = map(train, ~lm(bwt ~ blength + bhead + gaweeks + smoken + wtgain + momage, data = .x)),
-    mod_2  = map(train, ~lm(bwt~ blength + gaweeks, data = .x)),
-    mod_3  = map(train, ~lm(bwt~ bhead + blength + babysex + bhead*blength + 
+    mutate(
+          mod_1  = map(train, ~lm(bwt ~ blength + bhead + gaweeks + smoken + wtgain + momage, data = .x)),
+          mod_2  = map(train, ~lm(bwt~ blength + gaweeks, data = .x)),
+          mod_3  = map(train, ~lm(bwt~ bhead + blength + babysex + bhead*blength + 
                       bhead*babysex + babysex*blength + babysex*blength*bhead, data = .x))) %>% 
   mutate(
-    rmse_mod1 = map2_dbl(mod_1, test, ~rmse(model = .x, data = .y)),
-    rmse_mod2 = map2_dbl(mod_2, test, ~rmse(model = .x, data = .y)),
-    rmse_mod3 = map2_dbl(mod_3, test, ~rmse(model = .x, data = .y)))
+        rmse_mod1 = map2_dbl(mod_1, test, ~rmse(model = .x, data = .y)),
+        rmse_mod2 = map2_dbl(mod_2, test, ~rmse(model = .x, data = .y)),
+        rmse_mod3 = map2_dbl(mod_3, test, ~rmse(model = .x, data = .y)))
+
 ```
 
 Compare models. (Sidenote: RMSE has the range of outcome)
 ```{r}
+
 mod_com_df %>% 
   select(starts_with("rmse")) %>% 
-  pivot_longer(
-    everything(),
-    names_to = "model", 
-    values_to = "rmse",
-    names_prefix = "rmse_") %>% 
+    pivot_longer(
+                everything(),
+                names_to = "model", 
+                values_to = "rmse",
+                names_prefix = "rmse_") %>% 
+  
   mutate(model = fct_inorder(model)) %>% 
-  ggplot(aes(x = model, y = rmse)) + geom_violin()
+    ggplot(aes(x = model, y = rmse)) + geom_violin() +
+      labs(title = "Comparison of Models")
 
 ```
 
@@ -237,57 +264,63 @@ mod_com_df %>%
 ## problem 3
 
 Load weather dataset
-```{r}
+```{r, message = FALSE}
 
 weather_df = 
-  rnoaa::meteo_pull_monitors(
-    c("USW00094728"),
-    var = c("PRCP", "TMIN", "TMAX"), 
-    date_min = "2017-01-01",
-    date_max = "2017-12-31") %>%
+    rnoaa::meteo_pull_monitors(
+      c("USW00094728"),
+      var = c("PRCP", "TMIN", "TMAX"), 
+      date_min = "2017-01-01",
+      date_max = "2017-12-31") %>%
   mutate(
-    name = recode(id, USW00094728 = "CentralPark_NY"),
-    tmin = tmin / 10,
-    tmax = tmax / 10) %>%
+        name = recode(id, USW00094728 = "CentralPark_NY"),
+        tmin = tmin / 10,
+        tmax = tmax / 10) %>%
   select(name, id, everything())
+
 ```
 
 Visual exploration!
 ```{r}
+
 weather_df %>% 
   ggplot(aes(x = tmin, y = tmax)) + 
-  geom_point() 
+    geom_point() 
+
 ```
 
 5000 bootstrap samples fitting slr for tmax and tmin
 ```{r}
+
 bootstr =
-  weather_df %>% 
-  modelr::bootstrap(n = 5000) %>% 
-  mutate(
-    models = map(strap, ~ lm(tmax ~ tmin, data = .x)),
-    r_hat = map(models, broom::glance),
-    results = map(models, broom::tidy)) %>% 
+    weather_df %>% 
+      modelr::bootstrap(n = 5000) %>% 
+        mutate(
+              models = map(strap, ~ lm(tmax ~ tmin, data = .x)),
+              r_hat = map(models, broom::glance),
+              results = map(models, broom::tidy)) %>% 
+  
   select(results, r_hat) %>% 
-  unnest(results, r_hat) %>%
-mutate(term = str_replace(term,"\\(Intercept\\)","Intercept"))
+    unnest(results, r_hat) %>%
+      mutate(term = str_replace(term,"\\(Intercept\\)","Intercept"))
   
 ```
 
 obtaining estimates, tidying and cleaning
 ```{r}
+
 est =
-bootstr %>%
-select(term, estimate, adj.r.squared) %>%
-pivot_wider(
-names_from = "term",
-values_from = "estimate"
-) %>%
+  bootstr %>%
+    select(term, estimate, adj.r.squared) %>%
+      pivot_wider(
+                  names_from = "term",
+                  values_from = "estimate"
+                  ) %>%
   janitor::clean_names() %>%
-  rename(rhat_sq = adj_r_squared) %>%
-  mutate(
-    log_est = log(intercept * tmin)
-  ) %>%
+    rename(rhat_sq = adj_r_squared) %>%
+      mutate(
+            log_est = log(intercept * tmin)
+              ) %>%
   select(-intercept, -tmin)
 
 est
@@ -302,12 +335,13 @@ est %>%
                names_to = "estimates",
                values_to = "values") %>%
   ggplot(aes(x = estimates, y = values, fill = estimates)) + 
-  geom_violin(alpha = 0.4) +
-  labs( title = "Distribution of Estimates")
+    geom_violin(alpha = 0.4) +
+      labs( title = "Distribution of Estimates")
            
 
 ```
-Both estimates had a normal curve. R_hat squared had a tall and skinny curve while the log estimate had a short and fat curve. This signifies that R_hat squared had a lesser standard deviation compared with log estimate.
+
+Both estimates had a normal curve. R-hat squared had a tall and skinny curve while the log estimate had a short and fat curve. This signifies that R-hat squared had a lesser standard deviation compared with log estimate.
 
 
 95% confidence interval for both estimates
@@ -317,8 +351,9 @@ est %>%
                names_to = "estimates",
                values_to = "values") %>% 
   group_by(estimates) %>% 
-  summarize(
-    ci_lower = quantile(values, 0.025), 
-    ci_upper = quantile(values, 0.975), mean = mean(values), st_dev = sd(values))
+    summarize(
+            ci_lower = quantile(values, 0.025), 
+            ci_upper = quantile(values, 0.975), mean = mean(values), st_dev = sd(values))
+
 ```
 We can expect the true pop parameters of these estimates to fall within these intervals.
