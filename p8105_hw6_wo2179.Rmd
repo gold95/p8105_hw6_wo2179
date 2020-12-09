@@ -297,11 +297,11 @@ bootstr =
       modelr::bootstrap(n = 5000) %>% 
         mutate(
               models = map(strap, ~ lm(tmax ~ tmin, data = .x)),
-              r_hat = map(models, broom::glance),
+              glance = map(models, broom::glance),
               results = map(models, broom::tidy)) %>% 
   
-  select(results, r_hat) %>% 
-    unnest(results, r_hat) %>%
+  select(results, glance) %>% 
+    unnest(results, glance) %>%
       mutate(term = str_replace(term,"\\(Intercept\\)","Intercept"))
   
 ```
@@ -311,13 +311,13 @@ obtaining estimates, tidying and cleaning
 
 est =
   bootstr %>%
-    select(term, estimate, adj.r.squared) %>%
-      pivot_wider(
+      select(term, estimate, r.squared) %>%
+        pivot_wider(
                   names_from = "term",
                   values_from = "estimate"
                   ) %>%
   janitor::clean_names() %>%
-    rename(rhat_sq = adj_r_squared) %>%
+    rename(rhat_sq = r_squared) %>%
       mutate(
             log_est = log(intercept * tmin)
               ) %>%
